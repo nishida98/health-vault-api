@@ -12,6 +12,7 @@ data class MedicalExamResponse(
     val requestingDoctor: String,
     val examType: String,
     val result: String,
+    val files: List<ExamFileResponse>,
     val createdAt: Instant,
     val updatedAt: Instant,
 )

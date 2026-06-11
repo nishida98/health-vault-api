@@ -8,8 +8,10 @@ import com.healthvault.api.entity.UserAccount
 import com.healthvault.api.exception.DuplicateEmailException
 import com.healthvault.api.exception.InvalidUserInputException
 import com.healthvault.api.exception.UserAccountNotFoundException
+import com.healthvault.api.observability.ApplicationMetrics
 import com.healthvault.api.repository.UserAccountRepository
 import com.healthvault.api.security.PasswordHasher
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -18,13 +20,14 @@ import java.util.UUID
 class UserAccountService(
     private val userAccountRepository: UserAccountRepository,
     private val passwordHasher: PasswordHasher,
+    private val metrics: ApplicationMetrics,
 ) {
     @Transactional
     fun create(request: CreateUserAccountRequest): UserAccountResponse {
         ensureEmailIsAvailable(request.email)
         val password = passwordHasher.hash(request.password)
 
-        return userAccountRepository.save(
+        val user = userAccountRepository.save(
             UserAccount(
                 id = UuidCreator.getTimeOrderedEpoch(),
                 name = request.name.trim(),
@@ -33,7 +36,11 @@ class UserAccountService(
                 passwordHash = password.hash,
                 passwordSalt = password.salt,
             ),
-        ).toResponse()
+        )
+        metrics.userCreated()
+        logger.info("user_created userId={}", user.id)
+
+        return user.toResponse()
     }
 
     @Transactional(readOnly = true)
@@ -91,6 +98,8 @@ class UserAccountService(
         }
 
         userAccountRepository.deleteById(id)
+        metrics.userDeleted()
+        logger.info("user_deleted userId={}", id)
     }
 
     private fun getUser(id: UUID): UserAccount {
@@ -131,5 +140,9 @@ class UserAccountService(
         }
 
         return value
+    }
+
+    private companion object {
+        private val logger = LoggerFactory.getLogger(UserAccountService::class.java)
     }
 }

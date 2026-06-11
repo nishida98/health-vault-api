@@ -38,8 +38,89 @@ HTTP status codes without response body, such as `204 No Content`, do not use th
 - `204 No Content`: resource deleted successfully.
 - `400 Bad Request`: invalid path parameter or request body.
 - `401 Unauthorized`: invalid credentials or invalid/expired token.
-- `404 Not Found`: user, folder, or exam not found.
+- `404 Not Found`: user, folder, exam, or exam file not found.
 - `409 Conflict`: duplicated email.
+
+## Observability
+
+The API exposes Spring Boot Actuator endpoints for health checks and metrics.
+
+### Health
+
+```http
+GET /actuator/health
+```
+
+Response:
+
+```json
+{
+  "status": "UP"
+}
+```
+
+Kubernetes-style probes are enabled:
+
+```http
+GET /actuator/health/liveness
+GET /actuator/health/readiness
+```
+
+### Metrics
+
+```http
+GET /actuator/metrics
+GET /actuator/metrics/{metricName}
+```
+
+Relevant built-in metrics include:
+
+- `http.server.requests`: HTTP request latency and status distribution.
+- `jvm.memory.used`: JVM memory usage.
+- `jvm.threads.live`: live JVM thread count.
+- `process.cpu.usage`: process CPU usage.
+- `hikaricp.connections.active`: active database connections.
+
+Relevant HealthVault business metrics include:
+
+- `healthvault.users.created`
+- `healthvault.users.deleted`
+- `healthvault.auth.login` with tag `result=success|failure`
+- `healthvault.auth.token.validated`
+- `healthvault.medical.exams.created`
+- `healthvault.medical.exams.moved`
+- `healthvault.medical.exams.deleted`
+- `healthvault.medical.exam_files.upload_urls.created`
+- `healthvault.medical.exam_files.download_urls.created`
+- `healthvault.medical.exam_files.deleted`
+- `healthvault.exam.folders.created`
+
+### Prometheus
+
+```http
+GET /actuator/prometheus
+```
+
+Prometheus metric names are exported with Prometheus naming conventions. For example:
+
+```text
+healthvault_users_created_total
+healthvault_auth_login_total{result="success"}
+healthvault_medical_exams_moved_total
+healthvault_medical_exam_files_upload_urls_created_total
+```
+
+### Request Logs
+
+Every HTTP request is logged with:
+
+- HTTP method;
+- request path;
+- response status;
+- duration in milliseconds;
+- `X-Request-Id`.
+
+If the client sends `X-Request-Id`, the API reuses it. Otherwise, the API generates one and returns it in the response header.
 
 ## HealthVault Overview
 
@@ -322,6 +403,7 @@ Response:
               "requestingDoctor": "Dr. Alice Smith",
               "examType": "Blood test",
               "result": "Normal blood count.",
+              "files": [],
               "createdAt": "2026-06-11T10:00:00Z",
               "updatedAt": "2026-06-11T10:00:00Z"
             }
@@ -374,6 +456,7 @@ Response `201 Created`:
     "requestingDoctor": "Dr. Alice Smith",
     "examType": "Blood test",
     "result": "Normal blood count.",
+    "files": [],
     "createdAt": "2026-06-11T10:00:00Z",
     "updatedAt": "2026-06-11T10:00:00Z"
   }
@@ -421,6 +504,7 @@ Response:
       "requestingDoctor": "Dr. Alice Smith",
       "examType": "Blood test",
       "result": "Normal blood count.",
+      "files": [],
       "createdAt": "2026-06-11T10:00:00Z",
       "updatedAt": "2026-06-11T10:00:00Z"
     }
@@ -490,11 +574,132 @@ Response:
     "requestingDoctor": "Dr. Alice Smith",
     "examType": "Blood test",
     "result": "Normal blood count.",
+    "files": [],
     "createdAt": "2026-06-11T10:00:00Z",
     "updatedAt": "2026-06-11T10:00:00Z"
   }
 }
 ```
+
+## Medical Exam Files
+
+Exam images and files are not uploaded through the HealthVault API. The API stores only file metadata and returns pre-signed URLs for a cloud-provider-agnostic object storage service.
+
+### Create Upload URL
+
+```http
+POST /api/v1/users/{userId}/exams/{examId}/files/upload-url
+```
+
+Request:
+
+```json
+{
+  "fileName": "blood-result.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 1024
+}
+```
+
+Response `201 Created`:
+
+```json
+{
+  "data": {
+    "file": {
+      "id": "018fd6ac-21f2-74e8-b2af-6021bbcf6b39",
+      "examId": "018fd6ab-4ef3-77df-9e37-9f09aafd9d51",
+      "fileName": "blood-result.pdf",
+      "contentType": "application/pdf",
+      "sizeBytes": 1024,
+      "createdAt": "2026-06-11T10:00:00Z"
+    },
+    "method": "PUT",
+    "url": "http://localhost:9000/health-vault/users/{userId}/exams/{examId}/files/{fileId}/blood-result.pdf?operation=upload&expires=1781172900&signature=...",
+    "headers": {
+      "Content-Type": "application/pdf"
+    },
+    "expiresAt": "2026-06-11T10:15:00Z"
+  }
+}
+```
+
+Client flow:
+
+- Call this endpoint before uploading the file.
+- Upload the file bytes directly to `url` using the returned `method` and `headers`.
+- Do not send the file bytes to the HealthVault API.
+
+Rules:
+
+- `fileName` is required and limited to 255 characters.
+- `contentType` is required and limited to 120 characters.
+- `sizeBytes` must be between 1 byte and 50 MB.
+- The exam must belong to the given user.
+
+### List Exam Files
+
+```http
+GET /api/v1/users/{userId}/exams/{examId}/files
+```
+
+Response:
+
+```json
+{
+  "data": [
+    {
+      "id": "018fd6ac-21f2-74e8-b2af-6021bbcf6b39",
+      "examId": "018fd6ab-4ef3-77df-9e37-9f09aafd9d51",
+      "fileName": "blood-result.pdf",
+      "contentType": "application/pdf",
+      "sizeBytes": 1024,
+      "createdAt": "2026-06-11T10:00:00Z"
+    }
+  ]
+}
+```
+
+### Create Download URL
+
+```http
+GET /api/v1/users/{userId}/exams/{examId}/files/{fileId}/download-url
+```
+
+Response:
+
+```json
+{
+  "data": {
+    "file": {
+      "id": "018fd6ac-21f2-74e8-b2af-6021bbcf6b39",
+      "examId": "018fd6ab-4ef3-77df-9e37-9f09aafd9d51",
+      "fileName": "blood-result.pdf",
+      "contentType": "application/pdf",
+      "sizeBytes": 1024,
+      "createdAt": "2026-06-11T10:00:00Z"
+    },
+    "method": "GET",
+    "url": "http://localhost:9000/health-vault/users/{userId}/exams/{examId}/files/{fileId}/blood-result.pdf?operation=download&expires=1781172300&signature=...",
+    "headers": {},
+    "expiresAt": "2026-06-11T10:05:00Z"
+  }
+}
+```
+
+### Delete Exam File Metadata
+
+```http
+DELETE /api/v1/users/{userId}/exams/{examId}/files/{fileId}
+```
+
+Response:
+
+```http
+204 No Content
+```
+
+This removes the API metadata record. Object deletion in the storage provider should be handled by the provider implementation or a storage lifecycle policy.
 
 ### Delete Exam
 
