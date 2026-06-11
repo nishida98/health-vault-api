@@ -5,6 +5,7 @@ import com.healthvault.api.exception.DuplicateEmailException
 import com.healthvault.api.exception.InvalidCredentialsException
 import com.healthvault.api.exception.InvalidTokenException
 import com.healthvault.api.exception.InvalidUserInputException
+import com.healthvault.api.exception.MedicalExamNotFoundException
 import com.healthvault.api.exception.UserAccountNotFoundException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -29,6 +30,11 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(UserAccountNotFoundException::class)
     fun handleNotFound(exception: UserAccountNotFoundException): ResponseEntity<ErrorResponse> {
+        return response(HttpStatus.NOT_FOUND, exception.message.orEmpty())
+    }
+
+    @ExceptionHandler(MedicalExamNotFoundException::class)
+    fun handleMedicalExamNotFound(exception: MedicalExamNotFoundException): ResponseEntity<ErrorResponse> {
         return response(HttpStatus.NOT_FOUND, exception.message.orEmpty())
     }
 
