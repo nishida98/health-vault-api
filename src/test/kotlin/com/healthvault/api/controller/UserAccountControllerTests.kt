@@ -1,6 +1,7 @@
 package com.healthvault.api.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.healthvault.api.repository.MedicalExamRepository
 import com.healthvault.api.repository.UserAccountRepository
 import org.hamcrest.Matchers.blankOrNullString
 import org.hamcrest.Matchers.hasSize
@@ -22,10 +23,12 @@ import org.springframework.test.web.servlet.put
 class UserAccountControllerTests(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
+    @Autowired private val medicalExamRepository: MedicalExamRepository,
     @Autowired private val userAccountRepository: UserAccountRepository,
 ) {
     @BeforeEach
     fun cleanDatabase() {
+        medicalExamRepository.deleteAll()
         userAccountRepository.deleteAll()
     }
 
