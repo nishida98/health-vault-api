@@ -2,6 +2,7 @@ package com.healthvault.api.handler
 
 import com.healthvault.api.dto.ErrorResponse
 import com.healthvault.api.exception.DuplicateEmailException
+import com.healthvault.api.exception.ExamFolderNotFoundException
 import com.healthvault.api.exception.InvalidCredentialsException
 import com.healthvault.api.exception.InvalidTokenException
 import com.healthvault.api.exception.InvalidUserInputException
@@ -35,6 +36,11 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(MedicalExamNotFoundException::class)
     fun handleMedicalExamNotFound(exception: MedicalExamNotFoundException): ResponseEntity<ErrorResponse> {
+        return response(HttpStatus.NOT_FOUND, exception.message.orEmpty())
+    }
+
+    @ExceptionHandler(ExamFolderNotFoundException::class)
+    fun handleExamFolderNotFound(exception: ExamFolderNotFoundException): ResponseEntity<ErrorResponse> {
         return response(HttpStatus.NOT_FOUND, exception.message.orEmpty())
     }
 

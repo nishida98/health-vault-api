@@ -1,6 +1,7 @@
 package com.healthvault.api.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.healthvault.api.repository.ExamFolderRepository
 import com.healthvault.api.repository.MedicalExamRepository
 import com.healthvault.api.repository.UserAccountRepository
 import org.junit.jupiter.api.BeforeEach
@@ -17,12 +18,14 @@ import org.springframework.test.web.servlet.post
 class AuthControllerTests(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
+    @Autowired private val examFolderRepository: ExamFolderRepository,
     @Autowired private val medicalExamRepository: MedicalExamRepository,
     @Autowired private val userAccountRepository: UserAccountRepository,
 ) {
     @BeforeEach
     fun cleanDatabase() {
         medicalExamRepository.deleteAll()
+        examFolderRepository.deleteAll()
         userAccountRepository.deleteAll()
     }
 

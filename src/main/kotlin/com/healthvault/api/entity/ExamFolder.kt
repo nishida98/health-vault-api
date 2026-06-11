@@ -10,12 +10,11 @@ import jakarta.persistence.PrePersist
 import jakarta.persistence.PreUpdate
 import jakarta.persistence.Table
 import java.time.Instant
-import java.time.LocalDate
 import java.util.UUID
 
 @Entity
-@Table(name = "medical_exams")
-open class MedicalExam(
+@Table(name = "exam_folders")
+open class ExamFolder(
     @Id
     @Column(nullable = false, updatable = false)
     open var id: UUID,
@@ -24,21 +23,15 @@ open class MedicalExam(
     @JoinColumn(name = "user_id", nullable = false)
     open var user: UserAccount,
 
-    @Column(nullable = false, name = "performed_at")
-    open var performedAt: LocalDate,
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    open var parent: ExamFolder?,
 
-    @Column(nullable = false, name = "requesting_doctor", length = 120)
-    open var requestingDoctor: String,
+    @Column(nullable = false, length = 120)
+    open var name: String,
 
-    @Column(nullable = false, name = "exam_type", length = 120)
-    open var examType: String,
-
-    @Column(nullable = false, length = 4000)
-    open var result: String,
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "folder_id", nullable = false)
-    open var folder: ExamFolder,
+    @Column(nullable = false)
+    open var depth: Int,
 
     @Column(nullable = false, name = "created_at", updatable = false)
     open var createdAt: Instant = Instant.now(),
