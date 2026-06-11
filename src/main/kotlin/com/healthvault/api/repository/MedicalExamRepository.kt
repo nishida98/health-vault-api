@@ -9,4 +9,6 @@ interface MedicalExamRepository : JpaRepository<MedicalExam, UUID> {
     fun findAllByUserIdOrderByPerformedAtDesc(userId: UUID): List<MedicalExam>
 
     fun findByIdAndUserId(id: UUID, userId: UUID): Optional<MedicalExam>
+
+    fun findAllByUserIdAndFolderIdOrderByPerformedAtDesc(userId: UUID, folderId: UUID): List<MedicalExam>
 }
