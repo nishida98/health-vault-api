@@ -1,5 +1,6 @@
 package com.healthvault.api.controller
 
+import com.healthvault.api.dto.ApiResponse
 import com.healthvault.api.model.HealthVaultOverview
 import com.healthvault.api.service.HealthVaultService
 import org.springframework.web.bind.annotation.GetMapping
@@ -12,7 +13,7 @@ class HealthVaultController(
     private val healthVaultService: HealthVaultService,
 ) {
     @GetMapping
-    fun getOverview(): HealthVaultOverview {
-        return healthVaultService.getOverview()
+    fun getOverview(): ApiResponse<HealthVaultOverview> {
+        return ApiResponse(healthVaultService.getOverview())
     }
 }

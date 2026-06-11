@@ -1,6 +1,17 @@
 spring:
   application:
     name: health-vault-api
+  datasource:
+    url: jdbc:postgresql://localhost:5432/health-vault-db
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
 
 server:
   port: 8080
