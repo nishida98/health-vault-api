@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: health-vault-api
+
+server:
+  port: 8080
