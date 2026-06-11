@@ -10,6 +10,7 @@ import javax.crypto.spec.PBEKeySpec
 class PasswordHasher {
     private val random = SecureRandom()
     private val encoder = Base64.getEncoder()
+    private val decoder = Base64.getDecoder()
 
     fun hash(password: String): PasswordHash {
         val salt = ByteArray(SALT_SIZE_BYTES)
@@ -19,6 +20,10 @@ class PasswordHasher {
             hash = encodeHash(password, salt),
             salt = encoder.encodeToString(salt),
         )
+    }
+
+    fun matches(password: String, expectedHash: String, salt: String): Boolean {
+        return encodeHash(password, decoder.decode(salt)) == expectedHash
     }
 
     private fun encodeHash(password: String, salt: ByteArray): String {

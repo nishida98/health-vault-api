@@ -2,6 +2,8 @@ package com.healthvault.api.handler
 
 import com.healthvault.api.dto.ErrorResponse
 import com.healthvault.api.exception.DuplicateEmailException
+import com.healthvault.api.exception.InvalidCredentialsException
+import com.healthvault.api.exception.InvalidTokenException
 import com.healthvault.api.exception.InvalidUserInputException
 import com.healthvault.api.exception.UserAccountNotFoundException
 import org.springframework.http.HttpStatus
@@ -33,6 +35,16 @@ class ApiExceptionHandler {
     @ExceptionHandler(DuplicateEmailException::class)
     fun handleDuplicateEmail(exception: DuplicateEmailException): ResponseEntity<ErrorResponse> {
         return response(HttpStatus.CONFLICT, exception.message.orEmpty())
+    }
+
+    @ExceptionHandler(InvalidCredentialsException::class)
+    fun handleInvalidCredentials(exception: InvalidCredentialsException): ResponseEntity<ErrorResponse> {
+        return response(HttpStatus.UNAUTHORIZED, exception.message.orEmpty())
+    }
+
+    @ExceptionHandler(InvalidTokenException::class)
+    fun handleInvalidToken(exception: InvalidTokenException): ResponseEntity<ErrorResponse> {
+        return response(HttpStatus.UNAUTHORIZED, exception.message.orEmpty())
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException::class)
