@@ -2,6 +2,7 @@ package com.healthvault.api.service
 
 import com.github.f4b6a3.uuid.UuidCreator
 import com.healthvault.api.dto.CreateExamFolderRequest
+import com.healthvault.api.dto.ExamFileResponse
 import com.healthvault.api.dto.ExamFolderResponse
 import com.healthvault.api.dto.ExamFolderTreeResponse
 import com.healthvault.api.dto.MedicalExamResponse
@@ -10,9 +11,12 @@ import com.healthvault.api.entity.MedicalExam
 import com.healthvault.api.exception.ExamFolderNotFoundException
 import com.healthvault.api.exception.InvalidUserInputException
 import com.healthvault.api.exception.UserAccountNotFoundException
+import com.healthvault.api.observability.ApplicationMetrics
 import com.healthvault.api.repository.ExamFolderRepository
+import com.healthvault.api.repository.MedicalExamFileRepository
 import com.healthvault.api.repository.MedicalExamRepository
 import com.healthvault.api.repository.UserAccountRepository
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -21,7 +25,9 @@ import java.util.UUID
 class ExamFolderService(
     private val examFolderRepository: ExamFolderRepository,
     private val medicalExamRepository: MedicalExamRepository,
+    private val medicalExamFileRepository: MedicalExamFileRepository,
     private val userAccountRepository: UserAccountRepository,
+    private val metrics: ApplicationMetrics,
 ) {
     @Transactional
     fun create(userId: UUID, request: CreateExamFolderRequest): ExamFolderResponse {
@@ -34,7 +40,7 @@ class ExamFolderService(
             throw InvalidUserInputException("Folders can have at most $MAX_DEPTH levels.")
         }
 
-        return examFolderRepository.save(
+        val folder = examFolderRepository.save(
             ExamFolder(
                 id = UuidCreator.getTimeOrderedEpoch(),
                 user = user,
@@ -42,7 +48,11 @@ class ExamFolderService(
                 name = request.name.requiredText("name"),
                 depth = depth,
             ),
-        ).toResponse()
+        )
+        metrics.folderCreated()
+        logger.info("exam_folder_created userId={} folderId={} parentId={} depth={}", userId, folder.id, parent?.id, depth)
+
+        return folder.toResponse()
     }
 
     @Transactional(readOnly = true)
@@ -106,6 +116,16 @@ class ExamFolderService(
             requestingDoctor = requestingDoctor,
             examType = examType,
             result = result,
+            files = medicalExamFileRepository.findAllByExamIdOrderByCreatedAtDesc(id).map {
+                ExamFileResponse(
+                    id = it.id,
+                    examId = id,
+                    fileName = it.fileName,
+                    contentType = it.contentType,
+                    sizeBytes = it.sizeBytes,
+                    createdAt = it.createdAt,
+                )
+            },
             createdAt = createdAt,
             updatedAt = updatedAt,
         )
@@ -122,5 +142,6 @@ class ExamFolderService(
 
     private companion object {
         private const val MAX_DEPTH = 3
+        private val logger = LoggerFactory.getLogger(ExamFolderService::class.java)
     }
 }

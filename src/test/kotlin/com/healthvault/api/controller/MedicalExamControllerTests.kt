@@ -2,6 +2,7 @@ package com.healthvault.api.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.healthvault.api.repository.ExamFolderRepository
+import com.healthvault.api.repository.MedicalExamFileRepository
 import com.healthvault.api.repository.MedicalExamRepository
 import com.healthvault.api.repository.UserAccountRepository
 import org.hamcrest.Matchers.blankOrNullString
@@ -26,11 +27,13 @@ class MedicalExamControllerTests(
     @Autowired private val mockMvc: MockMvc,
     @Autowired private val objectMapper: ObjectMapper,
     @Autowired private val examFolderRepository: ExamFolderRepository,
+    @Autowired private val medicalExamFileRepository: MedicalExamFileRepository,
     @Autowired private val medicalExamRepository: MedicalExamRepository,
     @Autowired private val userAccountRepository: UserAccountRepository,
 ) {
     @BeforeEach
     fun cleanDatabase() {
+        medicalExamFileRepository.deleteAll()
         medicalExamRepository.deleteAll()
         examFolderRepository.deleteAll()
         userAccountRepository.deleteAll()
@@ -165,6 +168,21 @@ class MedicalExamControllerTests(
     }
 
     @Test
+    fun `deletes medical exam with file metadata`() {
+        val userId = createUser()
+        val folderId = createFolder(userId)
+        val examId = createExam(userId, folderId)
+        createExamFile(userId, examId)
+
+        mockMvc.delete("${examsPath(userId)}/$examId")
+            .andExpect {
+                status { isNoContent() }
+            }
+
+        assert(medicalExamFileRepository.findAll().isEmpty())
+    }
+
+    @Test
     fun `rejects medical exam for missing user`() {
         mockMvc.post(examsPath("018fd6a9-0a58-7cc4-8f63-7a1aee35b8f2")) {
             contentType = MediaType.APPLICATION_JSON
@@ -291,6 +309,112 @@ class MedicalExamControllerTests(
     }
 
     @Test
+    fun `creates a presigned upload url for a medical exam file`() {
+        val userId = createUser()
+        val folderId = createFolder(userId)
+        val examId = createExam(userId, folderId)
+
+        mockMvc.post("${examsPath(userId)}/$examId/files/upload-url") {
+            contentType = MediaType.APPLICATION_JSON
+            content = examFileJson(
+                fileName = "blood-result.pdf",
+                contentType = "application/pdf",
+                sizeBytes = 1024,
+            )
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.data.file.id") { exists() }
+            jsonPath("$.data.file.examId") { value(examId) }
+            jsonPath("$.data.file.fileName") { value("blood-result.pdf") }
+            jsonPath("$.data.file.contentType") { value("application/pdf") }
+            jsonPath("$.data.file.sizeBytes") { value(1024) }
+            jsonPath("$.data.method") { value("PUT") }
+            jsonPath("$.data.url") { exists() }
+            jsonPath("$.data.headers.Content-Type") { value("application/pdf") }
+            jsonPath("$.data.expiresAt") { exists() }
+        }
+
+        val file = medicalExamFileRepository.findAll().single()
+        assert(file.id.version() == 7)
+    }
+
+    @Test
+    fun `lists medical exam file metadata and includes files in exam response`() {
+        val userId = createUser()
+        val folderId = createFolder(userId)
+        val examId = createExam(userId, folderId)
+        createExamFile(userId, examId, fileName = "xray.png", mimeType = "image/png")
+
+        mockMvc.get("${examsPath(userId)}/$examId/files")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.data", hasSize<Any>(1))
+                jsonPath("$.data[0].fileName") { value("xray.png") }
+                jsonPath("$.data[0].contentType") { value("image/png") }
+            }
+
+        mockMvc.get("${examsPath(userId)}/$examId")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.data.files", hasSize<Any>(1))
+                jsonPath("$.data.files[0].fileName") { value("xray.png") }
+            }
+    }
+
+    @Test
+    fun `creates a presigned download url for a medical exam file`() {
+        val userId = createUser()
+        val folderId = createFolder(userId)
+        val examId = createExam(userId, folderId)
+        val fileId = createExamFile(userId, examId)
+
+        mockMvc.get("${examsPath(userId)}/$examId/files/$fileId/download-url")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.data.file.id") { value(fileId) }
+                jsonPath("$.data.method") { value("GET") }
+                jsonPath("$.data.url") { exists() }
+                jsonPath("$.data.headers") { exists() }
+                jsonPath("$.data.expiresAt") { exists() }
+            }
+    }
+
+    @Test
+    fun `deletes medical exam file metadata`() {
+        val userId = createUser()
+        val folderId = createFolder(userId)
+        val examId = createExam(userId, folderId)
+        val fileId = createExamFile(userId, examId)
+
+        mockMvc.delete("${examsPath(userId)}/$examId/files/$fileId")
+            .andExpect {
+                status { isNoContent() }
+                content { string(blankOrNullString()) }
+            }
+
+        mockMvc.get("${examsPath(userId)}/$examId/files/$fileId/download-url")
+            .andExpect {
+                status { isNotFound() }
+                jsonPath("$.errorMessage") { value("Medical exam file not found.") }
+            }
+    }
+
+    @Test
+    fun `rejects invalid medical exam file upload request`() {
+        val userId = createUser()
+        val folderId = createFolder(userId)
+        val examId = createExam(userId, folderId)
+
+        mockMvc.post("${examsPath(userId)}/$examId/files/upload-url") {
+            contentType = MediaType.APPLICATION_JSON
+            content = examFileJson(fileName = "", contentType = "", sizeBytes = 0)
+        }.andExpect {
+            status { isBadRequest() }
+            jsonPath("$.errorMessage") { exists() }
+        }
+    }
+
+    @Test
     fun `rejects folders deeper than three levels`() {
         val userId = createUser()
         val firstId = createFolder(userId, name = "Level 1")
@@ -366,6 +490,27 @@ class MedicalExamControllerTests(
             .asText()
     }
 
+    private fun createExamFile(
+        userId: String,
+        examId: String,
+        fileName: String = "blood-result.pdf",
+        mimeType: String = "application/pdf",
+        sizeBytes: Long = 1024,
+    ): String {
+        val response = mockMvc.post("${examsPath(userId)}/$examId/files/upload-url") {
+            contentType = MediaType.APPLICATION_JSON
+            content = examFileJson(fileName, mimeType, sizeBytes)
+        }.andExpect {
+            status { isCreated() }
+        }.andReturn()
+
+        return objectMapper.readTree(response.response.contentAsString)
+            .path("data")
+            .path("file")
+            .path("id")
+            .asText()
+    }
+
     private fun examJson(
         performedAt: String = "2026-01-10",
         requestingDoctor: String = "Dr. Jane Foster",
@@ -389,6 +534,16 @@ class MedicalExamControllerTests(
             mapOf(
                 "name" to name,
                 "parentId" to parentId,
+            ),
+        )
+    }
+
+    private fun examFileJson(fileName: String, contentType: String, sizeBytes: Long): String {
+        return objectMapper.writeValueAsString(
+            mapOf(
+                "fileName" to fileName,
+                "contentType" to contentType,
+                "sizeBytes" to sizeBytes,
             ),
         )
     }

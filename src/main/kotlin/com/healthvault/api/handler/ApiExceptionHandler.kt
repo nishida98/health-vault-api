@@ -6,6 +6,7 @@ import com.healthvault.api.exception.ExamFolderNotFoundException
 import com.healthvault.api.exception.InvalidCredentialsException
 import com.healthvault.api.exception.InvalidTokenException
 import com.healthvault.api.exception.InvalidUserInputException
+import com.healthvault.api.exception.MedicalExamFileNotFoundException
 import com.healthvault.api.exception.MedicalExamNotFoundException
 import com.healthvault.api.exception.UserAccountNotFoundException
 import org.springframework.http.HttpStatus
@@ -36,6 +37,11 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(MedicalExamNotFoundException::class)
     fun handleMedicalExamNotFound(exception: MedicalExamNotFoundException): ResponseEntity<ErrorResponse> {
+        return response(HttpStatus.NOT_FOUND, exception.message.orEmpty())
+    }
+
+    @ExceptionHandler(MedicalExamFileNotFoundException::class)
+    fun handleMedicalExamFileNotFound(exception: MedicalExamFileNotFoundException): ResponseEntity<ErrorResponse> {
         return response(HttpStatus.NOT_FOUND, exception.message.orEmpty())
     }
 
